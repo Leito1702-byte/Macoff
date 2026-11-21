@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Detector de ARP Spoofing</title>
+</head>
+<body>
+  <h1>Detector de ARP Spoofing</h1>
+
+  <!-- Botón manual para la primera ejecución -->
+  <button id="btn-escanear" onclick="escanearManual()">Escanear red Wi-Fi ahora</button>
+  <span id="estado-escaneo"></span>
+
+  <h2>Estado</h2>
+  <pre id="estado">Cargando...</pre>
+
+  <h2>Tabla de confianza (IP -> MAC)</h2>
+  <pre id="tabla">Cargando...</pre>
+
+  <h2>Alertas</h2>
+  <pre id="alertas">Sin alertas aún</pre>
+
+  <h2>Dispositivos conectados (Escaneo automático)</h2>
+  <pre id="historial">Cargando...</pre>
+
+  <script>
+    // Función para consultar los endpoints y refrescar la interfaz (cada 3 segundos)
+    async function actualizar() {
+      try {
+        const estado = await fetch('/api/status').then(r => r.json());
+        document.getElementById('estado').textContent = JSON.stringify(estado, null, 2);
+
+        const tabla = await fetch('/api/table').then(r => r.json());
+        document.getElementById('tabla').textContent = JSON.stringify(tabla, null, 2);
+
+        const alertas = await fetch('/api/alerts').then(r => r.json());
+        document.getElementById('alertas').textContent = alertas.length
+          ? JSON.stringify(alertas, null, 2)
+          : 'Sin alertas aún';
+
+        const dispositivos = await fetch('/api/devices').then(r => r.json());
+        document.getElementById('historial').textContent = dispositivos.length
+          ? JSON.stringify(dispositivos, null, 2)
+          : 'Esperando escaneo de red...';
+      } catch (error) {
+        console.error("Error al actualizar la interfaz:", error);
+      }
+    }
+
+    // Función interna para los barridos automáticos en segundo plano (cada 5 segundos)
+    async function escanearAutomatico() {
+      try {
+        await fetch('/api/scan', { method: 'POST' });
+        await actualizar(); 
+      } catch (error) {
+        console.error("Error en escaneo automático:", error);
+      }
+    }
+
+    // Función exclusiva para cuando el usuario hace clic en el botón por primera vez
+    async function escanearManual() {
+      const boton = document.getElementById('btn-escanear');
+      const info = document.getElementById('estado-escaneo');
+      
+      // Elimina el botón inmediatamente de la página
+      if (boton) {
+        boton.remove();
+      }
+
+      info.textContent = ' Escaneando la red por primera vez...';
+
+      try {
+        const respuesta = await fetch('/api/scan', { method: 'POST' });
+        const datos = await respuesta.json();
+        
+        info.textContent = ` ¡Listo! (${datos.encontrados} dispositivos encontrados). Escaneo automático activo.`;
+        await actualizar(); 
+      } catch (error) {
+        info.textContent = ' Error al escanear.';
+      }
+    }
+
+    // --- CICLOS AUTOMÁTICOS ---
+
+    // 1. Refresca los datos en la pantalla cada 3 segundos
+    actualizar();
+    setInterval(actualizar, 3000);
+
+    // 2. Ejecuta el escaneo activo de la red automáticamente cada 5 segundos en segundo plano
+    setInterval(escanearAutomatico, 5000);
+  </script>
+</body>
+</html>
